@@ -1,7 +1,3 @@
-// ============================================================
-// APP.JS — Urbano Envíos Dashboard
-// ============================================================
-
 let RAW = { actividades: [], compromisos: [], asignacion: [] };
 let DATA = { actas: [], compromisos: [], asignacion: [], meses: [], vendedores: [] };
 let curPage = "resumen";
@@ -15,9 +11,6 @@ function mo(x) { return "$" + Math.round(x || 0).toLocaleString("en-US"); }
 function pct(v, t) { return t ? Math.round((v / t) * 100) : 0; }
 function esc(s) { return (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
-// ============================================================
-// CARGA PRINCIPAL
-// ============================================================
 async function cargarTodo(forzado) {
   document.getElementById("loadingBox").classList.remove("hidden");
   document.getElementById("errorBox").classList.add("hidden");
@@ -26,13 +19,19 @@ async function cargarTodo(forzado) {
   setStatus("Comp", "load", "cargando…");
   setStatus("Asig", "load", "cargando…");
 
-  const resultados = await Promise.allSettled([
-    fetchCSV(FUENTES.actividades.url).then(r => { RAW.actividades = r; setStatus("Act", "ok", r.length - 1 + " filas"); }).catch(e => { setStatus("Act", "err", e.message); }),
-    fetchCSV(FUENTES.compromisos.url).then(r => { RAW.compromisos = r; setStatus("Comp", "ok", r.length - 1 + " filas"); }).catch(e => { setStatus("Comp", "err", e.message); }),
-    fetchCSV(FUENTES.asignacion.url).then(r => { RAW.asignacion = r; setStatus("Asig", "ok", r.length - 1 + " filas"); }).catch(e => { setStatus("Asig", "err", e.message); }),
-  ]);
+  const pActividades = fetchCSV(FUENTES.actividades.url)
+    .then(r => { RAW.actividades = r; setStatus("Act", "ok", (r.length - 1) + " filas"); return true; })
+    .catch(e => { setStatus("Act", "err", e.message); return false; });
 
-  const huboActividades = RAW.actividades && RAW.actividades.length > 1;
+  const pCompromisos = fetchCSV(FUENTES.compromisos.url)
+    .then(r => { RAW.compromisos = r; setStatus("Comp", "ok", (r.length - 1) + " filas"); procesarCompromisos(); if (!document.getElementById("content").classList.contains("hidden")) renderPage(); })
+    .catch(e => { setStatus("Comp", "err", e.message); });
+
+  const pAsignacion = fetchCSV(FUENTES.asignacion.url)
+    .then(r => { RAW.asignacion = r; setStatus("Asig", "ok", (r.length - 1) + " filas"); procesarAsignacion(); if (!document.getElementById("content").classList.contains("hidden")) renderPage(); })
+    .catch(e => { setStatus("Asig", "err", e.message); });
+
+  const huboActividades = await pActividades;
 
   if (!huboActividades) {
     document.getElementById("loadingBox").classList.add("hidden");
@@ -43,8 +42,6 @@ async function cargarTodo(forzado) {
   }
 
   procesarActividades();
-  procesarCompromisos();
-  procesarAsignacion();
 
   const ahora = new Date();
   const hora = ahora.toLocaleString("es-EC", { dateStyle: "short", timeStyle: "short" });
@@ -54,6 +51,8 @@ async function cargarTodo(forzado) {
   document.getElementById("loadingBox").classList.add("hidden");
   document.getElementById("content").classList.remove("hidden");
   renderPage();
+
+  Promise.allSettled([pCompromisos, pAsignacion]);
 }
 
 function setStatus(key, level, msg) {
@@ -63,9 +62,6 @@ function setStatus(key, level, msg) {
   txt.textContent = msg;
 }
 
-// ============================================================
-// PROCESAMIENTO: ACTIVIDADES (actas)
-// ============================================================
 function procesarActividades() {
   const rows = RAW.actividades;
   let headerIdx = -1;
@@ -137,9 +133,6 @@ function procesarActividades() {
   DATA.vendedores = Array.from(vendSet).sort();
 }
 
-// ============================================================
-// PROCESAMIENTO: COMPROMISOS
-// ============================================================
 function procesarCompromisos() {
   const rows = RAW.compromisos;
   if (!rows || rows.length < 2) { DATA.compromisos = []; return; }
@@ -182,9 +175,6 @@ function procesarCompromisos() {
   DATA.compromisos = compromisos;
 }
 
-// ============================================================
-// PROCESAMIENTO: ASIGNACIÓN DE CLIENTES
-// ============================================================
 function procesarAsignacion() {
   const rows = RAW.asignacion;
   if (!rows || rows.length < 2) { DATA.asignacion = []; return; }
@@ -233,9 +223,6 @@ function procesarAsignacion() {
   DATA.asignacion = asign;
 }
 
-// ============================================================
-// NAVEGACIÓN
-// ============================================================
 function nav(page, el) {
   curPage = page;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -254,9 +241,6 @@ function renderPage() {
   wireEvents();
 }
 
-// ============================================================
-// FILTRO BASE
-// ============================================================
 function actasFiltradas() {
   return DATA.actas.filter(a => {
     if (curFiltroMes !== "__TODOS__" && a.mes !== curFiltroMes) return false;
@@ -272,9 +256,6 @@ function actasFiltradas() {
   });
 }
 
-// ============================================================
-// helpers de gráficos
-// ============================================================
 function donutSVG(segs, size) {
   size = size || 170;
   const tot = segs.reduce((a, s) => a + s[1], 0) || 1;
@@ -309,9 +290,6 @@ function hbarChart(items, colorFn, fmt) {
   }).join("");
 }
 
-// ============================================================
-// FILTROS UI
-// ============================================================
 function filtrosHTML(opts) {
   opts = opts || {};
   const meses = DATA.meses;
@@ -358,9 +336,6 @@ function setFiltro(tipo, val) {
   }
 }
 
-// ============================================================
-// PÁGINA: RESUMEN
-// ============================================================
 function renderResumen() {
   const actas = actasFiltradas();
   const total = actas.length;
@@ -415,4 +390,223 @@ function renderResumen() {
           <div class="li"><span class="sw" style="background:#5A626B"></span>Mantenimiento <b>${mant}</b> <span class="pct">(${pct(mant, total)}%)</span></div>
           <div class="li"><span class="sw" style="background:#C8102E"></span>Cliente nuevo <b>${nuevo}</b> <span class="pct">(${pct(nuevo, total)}%)</span></div>
           <div class="li"><span class="sw" style="background:#2563EB"></span>Asuntos varios <b>${varios}</b> <span class="pct">(${pct(varios, total)}%)</span></div>
-          ${otro > 0 ? `<div class="li"><span class="sw" style="background:#F59E0B"></span>Sin clasificar <b>${otro}</b> <span class="pct">(${pct(
+          ${otro > 0 ? `<div class="li"><span class="sw" style="background:#F59E0B"></span>Sin clasificar <b>${otro}</b> <span class="pct">(${pct(otro, total)}%)</span></div>` : ""}
+        </div></div>
+        ${otro > 0 ? `<div class="insight a"><b>${otro} actas sin clasificar.</b> Su columna "Tipo de visita" en Google Sheets tiene un valor distinto a "Mantenimiento", "Cliente nuevo" o "Asuntos varios" (puede estar vacía o mal escrita). Revísala en la pestaña Actas usando el filtro de búsqueda.</div>` : ""}
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Evolución mensual de actas</h3>${barChart(mesesItems, () => "#C8102E")}</div>
+      <div class="card"><h3>Modalidad de reunión</h3>
+        <div class="dn"><div>${donutSVG([["Presencial", presencial, "#12B76A"], ["Virtual", virtual, "#F59E0B"]], 150)}</div>
+        <div class="leg">
+          <div class="li"><span class="sw" style="background:#12B76A"></span>Presencial <b>${presencial}</b></div>
+          <div class="li"><span class="sw" style="background:#F59E0B"></span>Virtual <b>${virtual}</b></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="card"><h3>Cuentas obligatorias <span class="cnt">${asigOblig.length} cuentas</span></h3>
+      ${renderTablaObligatorias(asigOblig)}
+    </div>
+  `;
+}
+
+function kpiCard(lbl, val, sub, cls, ic) {
+  return `<div class="kpi ${cls || ''}"><span class="ic">${ic || ''}</span><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`;
+}
+
+function renderTablaObligatorias(list) {
+  if (!list.length) return '<div class="empty">Sin datos de asignación cargados (verifica la URL de "Asignación de clientes")</div>';
+  const mesActual = DATA.meses[DATA.meses.length - 1];
+  const rows = list.slice(0, 30).map(a => {
+    const vis = a.visitas[mesActual] || "—";
+    const pillClass = vis === "VISITADO" ? "verde" : (vis === "PENDIENTE" ? "ambar" : "g");
+    return `<tr><td class="cod">${esc(a.cod)}</td><td class="nm">${esc(a.shipper)}</td><td>${esc(a.ejecutivo)}</td><td class="ce">${esc(a.tipo)}</td><td class="ce"><span class="pill ${pillClass}">${esc(vis)}</span></td></tr>`;
+  }).join("");
+  return `<table><thead><tr><th>Cód.</th><th>Shipper</th><th>Ejecutivo</th><th>Tipo</th><th>Visita ${mesActual ? "(" + mesActual.slice(0,3) + ")" : ""}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderActasPage() {
+  const actas = actasFiltradas().sort((a, b) => 0).reverse();
+
+  const cards = actas.slice(0, 200).map((a, i) => {
+    const idx = DATA.actas.indexOf(a);
+    const camposConContenido = Object.entries(a.campos).filter(([k, v]) => !esVacio(v));
+    const tipoCls = a.tipo === "mant" ? "g" : (a.tipo === "nuevo" ? "rojo" : (a.tipo === "varios" ? "azul" : "g"));
+    return `
+      <div class="acta-card">
+        <div class="acta-head" onclick="toggleActa(${idx})">
+          <div class="ah-l">
+            <span class="chev" id="chev${idx}">▶</span>
+            <span class="ah-cli">${esc(a.cliente)}</span>
+            <span class="pill ${tipoCls}">${esc(a.tipoRaw)}</span>
+            <span class="pill g">${esc(a.responsable)}</span>
+          </div>
+          <div class="ah-meta">${esc(a.fecha)} ${a.hora ? "· " + esc(a.hora) : ""} · ${esc(a.modalidad)} · ${esc(a.mes)}</div>
+        </div>
+        <div class="acta-body" id="body${idx}">
+          ${a.participantes ? `<div class="af-item"><span class="af-lbl">👥 Participantes</span><div class="af-txt">${esc(a.participantes)}</div></div>` : ""}
+          ${camposConContenido.map(([k, v]) => `<div class="af-item"><span class="af-lbl">${esc(k)}</span><div class="af-txt">${esc(v)}</div></div>`).join("")}
+          ${!camposConContenido.length && !a.participantes ? '<div class="af-item"><span class="af-txt" style="color:#B8BEC5">Sin contenido adicional registrado en esta acta.</span></div>' : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  const nota = actasFiltradas().length > 200 ? `<div class="insight b"><b>Mostrando 200 de ${actasFiltradas().length} actas.</b> Usa los filtros o el buscador para acotar el resultado.</div>` : "";
+
+  return `
+    ${filtrosHTML()}
+    <div class="card"><h3>Actas registradas <span class="cnt">${actasFiltradas().length} resultados</span></h3>
+      <p style="font-size:12.5px;color:#5A626B;margin-bottom:14px">Toca cualquier acta para expandir y ver todo su contenido: participantes, ventas, KPIs, facturación, cobranza, cobertura, capacitación y observaciones.</p>
+      ${nota}
+      ${cards || '<div class="empty">No hay actas que coincidan con los filtros.</div>'}
+    </div>
+  `;
+}
+
+function toggleActa(idx) {
+  const body = document.getElementById("body" + idx);
+  const chev = document.getElementById("chev" + idx);
+  const open = body.classList.contains("open");
+  if (open) { body.classList.remove("open"); chev.classList.remove("open"); }
+  else { body.classList.add("open"); chev.classList.add("open"); }
+}
+
+function renderVendedoresPage() {
+  const actas = actasFiltradas();
+  const porVend = {};
+  DATA.vendedores.forEach(v => porVend[v] = { total: 0, mant: 0, nuevo: 0, varios: 0, clientes: new Set() });
+  actas.forEach(a => {
+    if (!porVend[a.responsable]) porVend[a.responsable] = { total: 0, mant: 0, nuevo: 0, varios: 0, clientes: new Set() };
+    const p = porVend[a.responsable];
+    p.total++; p[a.tipo] = (p[a.tipo] || 0) + 1; p.clientes.add(a.cliente.toUpperCase());
+  });
+
+  const filas = Object.entries(porVend).filter(([v, d]) => d.total > 0 || curFiltroVend === v)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([v, d]) => `<tr class="rowclick" onclick="setFiltro('vend','${esc(v)}');nav('actas',document.querySelectorAll('.tab')[1])">
+      <td class="nm">${esc(v)}</td><td class="ce">${d.total}</td><td class="ce">${d.mant || 0}</td>
+      <td class="ce">${d.nuevo || 0}</td><td class="ce">${d.varios || 0}</td><td class="ce">${d.clientes.size}</td>
+    </tr>`).join("");
+
+  const rankItems = Object.entries(porVend).map(([v, d]) => [v, d.total]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+
+  return `
+    ${filtrosHTML({ vend: false })}
+    <div class="card"><h3>Volumen de actas por vendedor</h3>${barChart(rankItems, () => "#C8102E")}</div>
+    <div class="card"><h3>Detalle por vendedor <span class="cnt">${Object.values(porVend).filter(d=>d.total>0).length} activos</span></h3>
+      <table><thead><tr><th>Vendedor</th><th class="ce">Total actas</th><th class="ce">Mantenim.</th><th class="ce">Cliente nuevo</th><th class="ce">Asuntos varios</th><th class="ce">Clientes únicos</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="6" class="empty">Sin datos</td></tr>'}</tbody></table>
+      <div class="insight">Toca una fila para ver todas las actas de ese vendedor.</div>
+    </div>
+  `;
+}
+
+function renderCompromisosPage() {
+  const comps = DATA.compromisos.filter(c => {
+    if (curFiltroMes !== "__TODOS__" && c.mes !== curFiltroMes.toLowerCase() && c.mes !== curFiltroMes) return false;
+    if (curFiltroVend !== "__TODOS__" && c.ejecutivo !== curFiltroVend) return false;
+    if (curBusqueda) {
+      const q = curBusqueda.toLowerCase();
+      if (!(c.shipper.toLowerCase().includes(q) || c.tipo.toLowerCase().includes(q) || c.observaciones.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
+  if (!DATA.compromisos.length) {
+    return `<div class="card"><div class="empty">No se han cargado compromisos todavía.<br>Verifica que la URL de "Consolidado compromisos" esté configurada en <code>data.js</code>.</div></div>`;
+  }
+
+  const concluidos = comps.filter(c => c.estado.includes("CONCLUIDO") || c.estado.includes("CERRADO")).length;
+  const abiertos = comps.length - concluidos;
+  const porTipo = {};
+  comps.forEach(c => porTipo[c.tipo] = (porTipo[c.tipo] || 0) + 1);
+  const tipoItems = Object.entries(porTipo).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+  const rows = comps.slice(0, 150).map(c => {
+    const cls = c.estado.includes("CONCLUIDO") || c.estado.includes("CERRADO") ? "verde" : (c.estado.includes("PROCESO") ? "ambar" : "rojo");
+    return `<tr><td class="nm">${esc(c.shipper)}</td><td>${esc(c.tipo)}</td><td>${esc(c.ejecutivo)}</td><td class="ce">${esc(c.emision)}</td><td class="ce"><span class="pill ${cls}">${esc(c.estado)}</span></td><td style="max-width:260px;font-size:11.5px;color:#5A626B">${esc(c.observaciones.slice(0,120))}${c.observaciones.length>120?'…':''}</td></tr>`;
+  }).join("");
+
+  return `
+    ${filtrosHTML({ tipo: false })}
+    <div class="kpis">
+      ${kpiCard("Total compromisos", comps.length, "en el filtro actual", "k", "✅")}
+      ${kpiCard("Concluidos", concluidos, pct(concluidos, comps.length) + "% del total", "v", "✔️")}
+      ${kpiCard("Abiertos / en gestión", abiertos, pct(abiertos, comps.length) + "% del total", "a", "⏳")}
+    </div>
+    <div class="card"><h3>Compromisos por tipo</h3>${hbarChart(tipoItems, () => "#2563EB")}</div>
+    <div class="card"><h3>Detalle de compromisos <span class="cnt">${comps.length} resultados</span></h3>
+      <table><thead><tr><th>Shipper</th><th>Tipo</th><th>Ejecutivo</th><th class="ce">Emisión</th><th class="ce">Estado</th><th>Observaciones</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="empty">Sin resultados</td></tr>'}</tbody></table>
+      ${comps.length > 150 ? `<div class="insight b">Mostrando 150 de ${comps.length}. Usa el buscador para acotar.</div>` : ""}
+    </div>
+  `;
+}
+
+function renderClientesPage() {
+  const actas = actasFiltradas();
+  const porCliente = {};
+  actas.forEach(a => {
+    const key = a.cliente.toUpperCase();
+    if (!porCliente[key]) porCliente[key] = { nombre: a.cliente, total: 0, mant: 0, nuevo: 0, varios: 0, vendedores: new Set(), actas: [] };
+    const p = porCliente[key];
+    p.total++; p[a.tipo] = (p[a.tipo] || 0) + 1; p.vendedores.add(a.responsable);
+    p.actas.push(a);
+  });
+
+  const asigMap = {};
+  DATA.asignacion.forEach(a => { asigMap[a.shipper.toUpperCase()] = a; });
+
+  let list = Object.values(porCliente).sort((a, b) => b.total - a.total);
+  if (curBusqueda) {
+    const q = curBusqueda.toLowerCase();
+    list = list.filter(c => c.nombre.toLowerCase().includes(q));
+  }
+  if (sortState.col) {
+    list.sort((a, b) => {
+      let x, y;
+      if (sortState.col === "nombre") { x = a.nombre; y = b.nombre; }
+      else { x = a[sortState.col] || 0; y = b[sortState.col] || 0; }
+      return (x > y ? 1 : x < y ? -1 : 0) * sortState.dir;
+    });
+  }
+
+  const rows = list.slice(0, 150).map((c, i) => {
+    const asig = asigMap[c.nombre.toUpperCase()];
+    const key = c.nombre.replace(/'/g, "\\'");
+    return `<tr class="rowclick" onclick="setFiltro('busq','${esc(key)}');nav('actas',document.querySelectorAll('.tab')[1])">
+      <td class="rk">${i + 1}</td>
+      <td class="nm">${esc(c.nombre)}</td>
+      <td class="ce">${c.total}</td>
+      <td class="ce">${c.mant || 0}</td>
+      <td class="ce">${c.nuevo || 0}</td>
+      <td class="ce">${c.varios || 0}</td>
+      <td>${Array.from(c.vendedores).join(", ")}</td>
+      <td class="ce">${asig ? (asig.obligatoria ? '<span class="pill rojo">Obligatoria</span>' : '<span class="pill g">Normal</span>') : '<span class="pill g">—</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+    ${filtrosHTML({ vend: false, tipo: false })}
+    <div class="card"><h3>Clientes con más actas <span class="cnt">${list.length} clientes únicos</span></h3>
+      <p style="font-size:12.5px;color:#5A626B;margin-bottom:12px">Toca un cliente para ver el detalle completo de sus actas.</p>
+      <table><thead><tr>
+        <th></th>
+        <th onclick="sortClientes('nombre')">Cliente <span class="arrow">↕</span></th>
+        <th class="ce" onclick="sortClientes('total')">Actas <span class="arrow">↕</span></th>
+        <th class="ce">Mant.</th><th class="ce">Nuevo</th><th class="ce">Varios</th>
+        <th>Vendedor(es)</th><th class="ce">Cuenta</th>
+      </tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">Sin resultados</td></tr>'}</tbody></table>
+    </div>
+  `;
+}
+function sortClientes(col) {
+  if (sortState.col === col) sortState.dir *= -1; else { sortState.col = col; sortState.dir = -1; }
+  renderPage();
+}
+
+function wireEvents() {
+}
+
+window.addEventListener("DOMContentLoaded", () => { cargarTodo(); });
