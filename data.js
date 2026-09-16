@@ -22,11 +22,6 @@ const FUENTES = {
   }
 };
 
-// ============================================================
-// PARSER CSV ROBUSTO
-// Maneja: comillas dobles, comas dentro de campos citados,
-// saltos de línea dentro de campos citados, comillas escapadas ("")
-// ============================================================
 function parseCSV(text) {
   const rows = [];
   let row = [];
@@ -52,24 +47,18 @@ function parseCSV(text) {
       field += c; i++; continue;
     }
   }
-  // último campo/fila
   if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
   return rows;
 }
 
-// ============================================================
-// FETCH con timeout y manejo de error legible
-// ============================================================
-async function fetchCSV(url, timeoutMs = 15000) {
+async function fetchCSV(url, timeoutMs = 12000) {
   if (!url || url.startsWith("⚠️")) {
     throw new Error("URL no configurada todavía");
   }
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    // cache-buster para forzar datos frescos de Google (algunos proxies cachean el CSV)
-    const bust = (url.includes("?") ? "&" : "?") + "cachebust=" + Date.now();
-    const resp = await fetch(url + bust, {
+    const resp = await fetch(url, {
       signal: controller.signal,
       cache: "no-store",
       mode: "cors",
@@ -83,21 +72,10 @@ async function fetchCSV(url, timeoutMs = 15000) {
     return parseCSV(text);
   } catch (e) {
     clearTimeout(t);
-    // Reintento sin cache-buster por si el parámetro extra rompe el endpoint publicado
-    try {
-      const resp2 = await fetch(url, { mode: "cors", credentials: "omit", redirect: "follow" });
-      if (!resp2.ok) throw new Error("HTTP " + resp2.status);
-      const text2 = await resp2.text();
-      return parseCSV(text2);
-    } catch (e2) {
-      throw e; // reportamos el error original, más informativo
-    }
+    throw e;
   }
 }
 
-// ============================================================
-// Utilidades de normalización compartidas
-// ============================================================
 function limpiaTxt(s) {
   return (s || "").toString().trim();
 }
@@ -107,7 +85,6 @@ function esVacio(v) {
 }
 function normEjecutivo(s) {
   s = limpiaTxt(s).replace(/\s*-.*$/, "").trim();
-  // Title case
   return s.replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
 }
 function limpiaShipper(s) {
