@@ -4,7 +4,7 @@
 // Cada URL debe ser la publicación CSV de UNA pestaña de tu Google Sheets:
 // Archivo → Compartir → Publicar en la web → elegir la hoja → formato CSV
 //
-// Reemplaza los valores marcados con ⚠️ PENDIENTE por tu URL real.
+// Reemplaza los valores marcados con https://docs.google.com/spreadsheets/d/e/2PACX-1vSUTbL4kl33MFSl7j3dJCk_o0dWgUIUZCja8Z4Ug899-FO-ASkdjilx_3fX9TeJsjZj37oidvqE9XAI/pub?output=csv por tu URL real.
 // ============================================================
 
 const FUENTES = {
